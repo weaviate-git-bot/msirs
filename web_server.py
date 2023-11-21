@@ -33,8 +33,11 @@ def upload_file():
         file_path = os.path.join(folder, filename)
         try:
             if (
-                os.path.isfile(file_path) or os.path.islink(file_path)
-            ) and not re.findall("home", file_path):
+                os.path.isfile(file_path)
+                or os.path.islink(file_path)
+                and not re.findall("home", file_path)
+                and not re.findall("agbv|tud-logo|msirs_logo|tu_fk", file_path)
+            ):
                 os.unlink(file_path)
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
@@ -79,7 +82,7 @@ def upload_file():
 
         # TODO: dddddddd
         stdin, stdout, stderr = server.ssh.exec_command(
-            "source ~/codebase-v1/venv/bin/activate && python3 ~/msirs/pipeline_v2.py"
+            "source ~/codebase-v1/venv/bin/activate && python3 ~/msirs/pipeline_v2_2_query.py"
         )
         stdout.channel.recv_exit_status()
         lines = stdout.readlines()
@@ -145,6 +148,7 @@ def upload():
     uploaded_file = request.files["file"]
     if uploaded_file.filename != "":
         print("Received file")
+        server = Server()
         # path = f"static/query{str(uploaded_file.filename)[-4:]}"
         # uploaded_file.save(uploaded_file.filename)
         stdin, stdout, stderr = server.ssh.exec_command(
