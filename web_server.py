@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import time, os, re, io, shutil, paramiko, pysftp
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 from base64 import encodebytes
 from PIL import Image
 from pathlib import Path
+import json
 
 
 def get_response_image(image_path):
@@ -16,6 +17,7 @@ def get_response_image(image_path):
 
 home_dir = str(Path.home())
 app = Flask(__name__, template_folder="template")
+app.secret_key = "BAD_SECRET_KEY"
 # app.config['UPLOAD_FOLDER'] = "/Users/dusc/segmentation//"
 
 
@@ -33,8 +35,7 @@ def upload_file():
         file_path = os.path.join(folder, filename)
         try:
             if (
-                os.path.isfile(file_path)
-                or os.path.islink(file_path)
+                (os.path.isfile(file_path) or os.path.islink(file_path))
                 and not re.findall("home", file_path)
                 and not re.findall("agbv|tud-logo|msirs_logo|tu_fk", file_path)
             ):
@@ -86,8 +87,14 @@ def upload_file():
         )
         stdout.channel.recv_exit_status()
         lines = stdout.readlines()
+        distances = []
         for line in lines:
-            print(line)
+            if re.findall("Distances", line):
+                print(line.split(":")[-1][1:])
+                session["distances"] = json.loads(line.split(":")[-1][1:])
+                # print(line)
+
+        print(f"{distances = }")
         print("Venv activated")
         # execute script
         # stdin, stdout, stderr = server.ssh.exec_command("")
@@ -113,7 +120,7 @@ def upload_file():
         server.ssh.close()
         print("Closes connections.")
 
-        return redirect("results")
+        return redirect(url_for("results"))
     else:
         return url_for("home")
 
@@ -124,8 +131,13 @@ def results():
     files = os.listdir(res_path)
     # results = [res_path+i for i in files if re.findall("result", i) or re.findall("query", i)]
     results = [i for i in files if re.findall("retrieval", i)]
+    results = [f"retrieval_{i+1}.png" for i in range(len(results))]
+    distances = [0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.6, 0.9]
+    distances = session["distances"]
+    # results = sorted(results)
+
     print(results)
-    return render_template("results.html", binderList=results)
+    return render_template("results.html", binderList=results, distances=distances)
 
 
 @app.route("/upload_success")

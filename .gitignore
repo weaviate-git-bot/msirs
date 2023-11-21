@@ -1,3 +1,4 @@
 __pycache__/
-*.png
-*.pickle
+**/*.png
+**/*.jpg
+**/*.pickle
