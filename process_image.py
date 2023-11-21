@@ -11,6 +11,7 @@ import time, copy, cv2
 from sklearn.cluster import DBSCAN, OPTICS
 import matplotlib.patches as mpatches
 from PIL import Image
+import seaborn as sns
 
 
 CATEGORIES = {
@@ -78,13 +79,11 @@ def post_process(img_file):
 
 
 def find_bounding_box(img, val):
+    # TODO: pass all vals and loop over them in here for better performance
     # builds a box around an area of a certain color (denoted by val)
-    min_x = np.shape(img)[0] + 1
-    min_y = np.shape(img)[1] + 1
-    max_x = -1
-    max_y = -1
+    img_x = np.shape(img)[1]
+    img_y = np.shape(img)[0]
 
-    # TODO: get min and max coordinates of pixels of certain color
     idx = np.where(
         (img[:, :, 0] == val[0]) & (img[:, :, 1] == val[1]) & (img[:, :, 2] == val[2])
     )
@@ -101,10 +100,9 @@ def find_bounding_box(img, val):
         # too small dont use
         # gets filtered out in detect_region method
         return [1, 0, 1, 0]
-    elif box_size_x < 100 or box_size_y < 100:
-        border_x = 200 - box_size_x
-        border_y = 200 - box_size_y
-
+    # elif box_size_x < 100 or box_size_y < 100:
+    #     border_x = 200 - box_size_x
+    #     border_y = 200 - box_size_y
     elif box_size_x < 200 or box_size_y < 200:
         border_x = 200 - box_size_x
         border_y = 200 - box_size_y
@@ -117,83 +115,101 @@ def find_bounding_box(img, val):
         min_x = min_x - border_x
     else:
         min_x = 0
-    if max_x < np.shape(img)[1] - border_x:
+    if max_x < img_x - border_x:
         max_x = max_x + border_x
     else:
-        max_x = np.shape(img)[1]
-    if max_y < np.shape(img)[0] - border_y:
+        max_x = img_x
+    if max_y < img_y - border_y:
         max_y = max_y + border_y
     else:
-        max_y = np.shape(img)[0]
+        max_y = img_y
 
     return [min_x, max_x, min_y, max_y]
 
 
 def detect_regions(img_path):
-    # TODO: make bounding box at least 50x50
-    # TODO: kind of exclude the edge of the image. cut off 50 edge pixels for ROI preselection, but add back for creation of bounding boxes
+    print("Entering detect_region method...")
     img = skimage.io.imread(img_path)
-    fig = plt.figure()
-    plt.imshow(img)
-    plt.title("Original Image")
-    plt.show()
-    unique_vals = np.unique(img.reshape(-1, img.shape[2]), axis=0)
-    print(len(unique_vals))
-    print(interesting_classes)
+    print("Loaded image")
+    # fig = plt.figure()
+    # plt.imshow(img)
+    # plt.title("og")
+    # plt.show()
+    start = time.monotonic()
+    # unique_vals = np.unique(img.reshape(-1, img.shape[2]), axis=0)
+    int_vals = interesting_classes
     boxes = []
-    if len(unique_vals) > 1:
-        for val in unique_vals:
-            if tuple(val[:3]) in interesting_classes:
-                print("HEYO")
-                c_img = copy.deepcopy(img)
-                for v in range(len(val)):
-                    c_img[c_img[:, :, v] != val[v]] = np.array([0, 0, 0, 255])
-                    fig = plt.figure()
-                    plt.imshow(c_img)
-                    plt.title(f"Segments of {val}")
-                    plt.show()
-
+    for val in int_vals:
+        if val[:3] in img[:, :, :3]:
+            try:
+                start = start_col = time.monotonic()
+                c_img = copy.deepcopy(img)[:, :, :3]
+                print(f"Created copy of img in {time.monotonic()-start}s")
+                start = time.monotonic()
+                # c_img = np.where(
+                #     c_img != np.array(list(val)), np.array(list(val)), np.array([0, 0, 0])
+                # )
+                c_img = np.all(c_img == val, axis=-1)
+                print(f"Initial recoloring took {time.monotonic()-start}s")
+                plt.imsave("recoloring_test_1.png", c_img.astype("uint8"))
                 pix_to_cluster = []
-                for x in range(np.shape(c_img)[0]):
-                    for y in range(np.shape(c_img)[1]):
-                        if list(c_img[x, y]) == list(val):
-                            pix_to_cluster.append([x, y])
-
-                optics = DBSCAN(metric="cityblock", eps=2)
+                start = time.monotonic()
+                pix_to_cluster = np.where(c_img == True)
+                pix_to_cluster_arr = copy.deepcopy(pix_to_cluster)
+                pix_to_cluster = [
+                    [pix_to_cluster[0][i], pix_to_cluster[1][i]]
+                    for i in range(len(pix_to_cluster[0]))
+                ]
+                print(f"Extracted pixels to cluster in {time.monotonic()-start}s")
+                start = time.monotonic()
+                optics = DBSCAN(metric="cityblock", eps=1, min_samples=5)
+                print(f"Done with clustering in {time.monotonic()-start}")
                 res = optics.fit(np.array(pix_to_cluster)).labels_
-                print(res)
-                num_of_seg = len(np.unique(res))
-                # print(f"There are {num_of_seg} segements")
-                if num_of_seg > 1:
-                    l_img = copy.deepcopy(c_img)
+                res_labels = np.unique(res)
+                print(f"LABELS: { res_labels }")
+
+                print(f"Finished to bounding box in {time.monotonic()-start_col}s!")
+                if len(res_labels) > 1:
+                    l_img = np.zeros(np.shape(img))[:, :, :3]
+                    palette = sns.color_palette(None, len(res_labels))
+                    seg_colors = []
+                    start = time.monotonic()
+                    # FIXME: this doesnt work yet
+                    # colors = [[res[i]] * 3 for i in range(len(pix_to_cluster))]
+                    # l_img[pix_to_cluster_arr] = colors
+                    # plt.imsave("wow_much_optimization.png", l_img.astype("uint8"))
                     for idx in range(len(pix_to_cluster)):
                         if res[idx] >= 0:
-                            l_img[pix_to_cluster[idx][0], pix_to_cluster[idx][1], :] = [
-                                res[idx] * 10 + 100,
-                                res[idx] * 100 + 1,
-                                res[idx] * 10 + 100,
-                                255,
-                            ]
-                    seg_colors = unique_vals = np.unique(
-                        l_img.reshape(-1, l_img.shape[2]), axis=0
-                    )
-                    seg_colors = [i for i in seg_colors if i[0] != 0]
+                            color = [res[idx] + 1] * 3
+                            if color not in seg_colors:
+                                seg_colors.append(color)
+                            l_img[
+                                pix_to_cluster[idx][0], pix_to_cluster[idx][1], :
+                            ] = color
+                    print(f"Final recoloring took {time.monotonic()-start}s")
 
-                    plt.imshow(l_img)
-                    plt.title(f"Detected patches of identical color")
-                    plt.show()
-
+                    print(len(seg_colors))
                     for sc in seg_colors:
+                        start = time.monotonic()
                         box = find_bounding_box(l_img, sc)
+                        print(f"Found bounding box in {time.monotonic()-start}s")
                         if box[1] - box[0] > 0 and box[3] - box[2] > 0:
                             boxes.append(box)
 
                 else:
                     # only one segment, create bounding box
-                    box = find_bounding_box(c_img, val)
+                    start = time.monotonic()
+                    c_img2 = np.zeros(np.shape(img))
+                    c_img2[:, :, 0] = c_img * val[0]
+                    c_img2[:, :, 1] = c_img * val[1]
+                    c_img2[:, :, 2] = c_img * val[2]
+                    print(c_img2[0:4, 0:4, :])
+                    box = find_bounding_box(c_img2, val)
+                    print(f"Found bounding box in {time.monotonic()-start}s")
                     if box[1] - box[0] > 0 and box[3] - box[2] > 0:
                         boxes.append(box)
-
+            except Exception:
+                pass
     return boxes
 
 
@@ -221,10 +237,6 @@ if __name__ == "__main__":
     file_names_mrf = [
         "/Users/dusc/segmentation/segmented/ESP_061636_1615_RED_img_row_22528_col_4096_w_1024_h_1024_x_0_y_0_densenet1612_mrf.png"
     ]
-    # file_names_mrf = ["../segmentation/segmenttest.png"]
-    file_names_mrf = [
-        "/Users/dusc/segmentation/segmented/ESP_046128_2465_RED_img_row_2048_col_7168_w_1024_h_1024_x_0_y_0_densenet1611_mrf.png"
-    ]
 
     for file in file_names_mrf:
         boxes = detect_regions(file)
@@ -237,19 +249,18 @@ if __name__ == "__main__":
         print(region_info)
         # print(cutouts)
 
-        if len(cutouts) > 1:
-            img = skimage.io.imread(file)
-            fig = plt.imshow(img)
-            plt.title("OG image")
-            plt.show()
-            fig = plt.figure()
-            rows = 4
-            cols = 2
-            counter = 1
-            for cutout in cutouts:
-                fig.add_subplot(rows, cols, counter)
-                plt.imshow(cutout)
-                plt.title("Cutouts")
-                plt.axis("off")
-                counter += 1
-            plt.show()
+    #     if len(cutouts)>1:
+    #         fig = plt.imshow(img)
+    #         plt.title("OG image")
+    #         plt.show()
+    #         fig = plt.figure()
+    #         rows = 4
+    #         cols = 2
+    #         counter = 1
+    #         for cutout in cutouts:
+    #             fig.add_subplot(rows, cols, counter)
+    #             plt.imshow(cutout)
+    #             plt.title("Cutouts")
+    #             plt.axis("off")
+    #             counter += 1
+    #         plt.show()

@@ -6,20 +6,17 @@
 </head>
 
 <body>
-  <h1>Results are here!!</h1>
-
-  <h2>Query image</h2><img src="static/query.jpg" alt="test" width=
-  "250" height="250">
-
-  <h2>Results</h2>{% for n in range(binderList| length) %} <img src=
-  "{{url_for('static',filename=binderList[n])}}" width="250" height=
-  "250" alt=binderList> {{ distances[n] }} {% endfor %}
+  <h1>Upload failed!</h1>
+  <h2>sorry we dont print proper error messages around here</h2>
 <footer>
   <button><a href=
   "http://127.0.0.1:5000/">Query another image</a></button>
 
   <button><a href=
   "http://127.0.0.1:5000/">Download images (WIP)</a></button>
+
+  <button><a href=
+  "http://127.0.0.1:5000/upload">Try another upload</a></button>
 </footer>
 </body>
 </html>
