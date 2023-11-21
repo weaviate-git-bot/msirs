@@ -5,16 +5,20 @@ import numpy as np
 import skimage
 from skimage.color.colorconv import rgb2gray, gray2rgb
 import torch
-import re, os
+import re, os, time
 from torchvision import transforms
+#from process_image import detect_regions
 from process_image import detect_regions
 from domars_map import MarsModel
-from PIL import Image
 from pathlib import Path
 import weaviate
+from PIL import Image, ImageFile
+
+Image.MAX_IMAGE_PIXELS = 78256587200
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 IMAGE_THRESHOLD_CERT = 11
-ROI_THRESHOLD_CERT_LOW = 8
+ROI_THRESHOLD_CERT_LOW = 2
 ROI_THRESHOLD_CERT_HIGH = 10
 HOME = str(Path.home())
 classes = {
@@ -55,21 +59,16 @@ color_info = {
 
 
 interesting_classes = [
-    color_info["cra"],
     color_info["aec"],
     color_info["ael"],
     color_info["cli"],
     color_info["rid"],
     color_info["fsf"],
-]
-
-interesting_classes = [
+    color_info["sfe"],
+    color_info["fsg"],
+    color_info["fse"],
     color_info["cra"],
-    color_info["aec"],
-    color_info["ael"],
-    color_info["cli"],
-    color_info["rid"],
-    color_info["fsf"],
+    color_info["sfx"],
 ]
 
 
@@ -160,6 +159,7 @@ def get_model_descriptor(img: np.ndarray, model, data_transform, device):
 
     img = ctx_image.unsqueeze(0)
     desc = model.fc_layer_output2(img.to(device))
+
     print(f"Size of the descriptor: {np.shape(desc)}")
     return desc
 
@@ -185,23 +185,19 @@ def process_image(file: str, model_stuff):
     og_file = re.sub("mrf", "img", file)
     og_img = skimage.io.imread(og_file)
     og_img = rgb2gray(og_img[:, :, :3])
-    img_cert = check_img(og_file, model, data_transform, device)
-    og_file_name = og_file.split("/")[-1]
+    # img_cert = check_img(og_file, model, data_transform, device)
+    # og_file_name = og_file.split("/")[-1]
+    # TODO: kinda useless for large images, delete this
+    img_cert = 0
     if img_cert > IMAGE_THRESHOLD_CERT:
         # set higher requirements for ROI cert
         ROI_THRESHOLD_CERT = ROI_THRESHOLD_CERT_HIGH
-        # save image as ROI
-        rois.append((0, np.shape(og_img)[0], 0, np.shape(og_img)[1]))
-        # get descriptor
-        desc = get_model_descriptor(og_img, model, data_transform, device)
-        desc = desc
-        plt.imsave(f"extracted/{og_file_name}_{img_cert}.png", og_img)
-        descriptors.append(desc)
     else:
         ROI_THRESHOLD_CERT = ROI_THRESHOLD_CERT_LOW
 
+    start = time.monotonic()
     boxes = initial_rois(file)
-    print(f"Created {len(boxes)} boxes")
+    print(f"Created {len(boxes)} boxes in {time.monotonic()-start}s")
     for c in boxes:
         cutout = og_img[int(c[0]) : int(c[1]), int(c[2]) : int(c[3])]
         # print("Done with cutout")
@@ -209,7 +205,7 @@ def process_image(file: str, model_stuff):
         if np.shape(cutout)[0] >= 50 and np.shape(cutout)[1] >= 50:
             # run through network
             cert, pred = check_cutout(og_file, c, model, data_transform, device)
-            # print(cert)
+            print("Cert: ",cert)
             # plt.imshow(og_img[int(c[0]) : int(c[1]), int(c[2]) : int(c[3])])
             # plt.title(f"{ cert }")
             # plt.show()
@@ -240,10 +236,18 @@ if __name__ == "__main__":
     database_dir = f"{HOME}/segmentation/segmented/"
     file_list = os.listdir(database_dir)
     file_list = [database_dir + i for i in file_list if re.findall("mrf", i)]
-    file_list = ["segmenttest.png"]
+    file_list = [
+        "/home/pg2022/segmentation/segmented/presi_segment_og_densenet1614_mrf.png"
+    ]   
     print(file_list)
     for file in file_list:
         print(file)
+        img = skimage.io.imread(file)
         results, descriptors = process_image(file, model_stuff)
         print(f"Found {len(results)} interesting results")
+        print(results)
+        counter = 0
+        for result in results:
+            plt.imsave(f"segmentation_test_results/{counter}.png",img[result[0]:result[1],result[2]:result[3]])
+            counter += 1
         # TODO: save to db

@@ -500,7 +500,6 @@ def segment_image(
     predictions = []
     scores = []
     image_pred = []
-    heatmap = []
 
     with tqdm(test_loader, desc="Segmenting", leave=False) as t:
         #    print(t)
@@ -512,9 +511,9 @@ def segment_image(
                 pred = torch.argmax(y_hat, dim=1).cpu()
 
                 image_pred.append(center_pixels.numpy())
-                predictions.append(pred.numpy())
+                # predictions.append(pred.numpy())
+                predictions.append(y_hat.cpu().numpy())
                 scores.append(F.softmax(y_hat, dim=1).detach().cpu().numpy())
-                heatmap.append(torch.max(y_hat).cpu().detach().numpy())
 
     # TODO: interpolate data onto image of original size.
     predictions = np.concatenate(predictions, axis=0)
@@ -524,19 +523,13 @@ def segment_image(
         (np.int(img_size / step_size), np.int(img_size / step_size))
         + (int(hyper_params["num_classes"]),),
     )
+    scores = resize(scores, (img_size, img_size))
     image_pred = np.reshape(
         np.concatenate(image_pred, axis=0),
         (np.int(img_size / step_size), np.int(img_size / step_size)),
     )
-
-    heatmap = np.reshape(
-        np.concatenate(heatmap, axis=0),
-        (np.int(img_size / step_size), np.int(img_size / step_size)),
-    )
     image_pred = resize(image_pred, (img_size, img_size))
-    heatmap = resize(heatmap, (img_size, img_size))
-    heatmap *= 255.0 / heatmap.max().astype("uint8")
-    jet_cm = plt.cm.get_cmap("jet")
+
     # TODO: make this dependable on step_size
     scores = resize(scores, (img_size, img_size) + (int(hyper_params["num_classes"]),))
 
@@ -566,9 +559,9 @@ def segment_image(
         + str(step_size)
         + "_map.png",
         resize(predictions, (img_size, img_size)),
-        cmap=cm,
-        vmin=0,
-        vmax=int(hyper_params["num_classes"]),
+        # cmap=cm,
+        # vmin=0,
+        # vmax=int(hyper_params["num_classes"]),
     )
     plt.imsave(
         home_dir
@@ -592,19 +585,6 @@ def segment_image(
         + "_mrf.png",
         mrf_classes,
         cmap=cm,
-        vmin=0,
-        vmax=int(hyper_params["num_classes"]),
-    )
-    plt.imsave(
-        home_dir
-        + "/segmentation/segmented/"
-        + img_name
-        + "_"
-        + network_name
-        + str(step_size)
-        + "_heatmap.png",
-        heatmap,
-        cmap=jet_cm,
         vmin=0,
         vmax=int(hyper_params["num_classes"]),
     )

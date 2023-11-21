@@ -41,11 +41,10 @@ def query_img(client, img_desc, class_name, num_to_retrieve=10):
 schema = {
     "classes": [
         {
-            "class": "DoMars",
+            "class": "DoMars16k",
             "vectorizer": "none",
             "properties": [
                 {"name": "SourceName", "dataType": ["text"]},
-                {"name": "Coordinates", "dataType": ["text"]},
             ],
         }
     ]
@@ -53,13 +52,16 @@ schema = {
 
 if __name__ == "__main__":
     client = weaviate.Client("http://localhost:8080")
+    print(client.query.aggregate("RegionOfInterest").with_fields("meta {count}").do())
+    print(client.query.aggregate("DoMars16k").with_fields("meta {count}").do())
+    print(client.query.aggregate("DoMars").with_fields("meta {count}").do())
     #client.schema.delete_class("RegionOfInterest")
-    client.schema.create(schema)
+    #client.schema.create(schema)
     print(client.schema.get())
     data = {"SourceName": "Test1", "Coordinates": "1111"}
-    vec = {"vector": [1,1,1,1,2]}
-    vec2 = [1,2,3,4,5]
-    vec3 = [1,3,3,4,5]
+    vec = {"vector": [1, 1, 1, 1, 2]}
+    vec2 = [1, 2, 3, 4, 5]
+    vec3 = [1, 3, 3, 4, 5]
     # client.data_object.create(data, "RegionOfInterest",vector=vec2)
 
 
@@ -74,4 +76,3 @@ if __name__ == "__main__":
 #    print(result)
 #    res = [i["_additional"]["distance"] for i in result["data"]["Get"]["RegionOfInterest"]]
 #    print(res)
-

@@ -2,7 +2,7 @@
 
 import shutil
 import numpy as np
-import weaviate, re, os, random, pickle
+import weaviate, re, os, random
 import skimage.io
 from matplotlib import pyplot as plt
 from process_image import detect_regions, extract_regions, post_process
@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torchvision import transforms
 from torch.utils.data import DataLoader
-import glob, time
+import glob
 from domars_map import MarsModel, HIRISE_Image, segment_image
 from process_image2 import process_image
 from process_image import detect_regions
@@ -19,12 +19,7 @@ from scipy import spatial
 from pathlib import Path
 from torchvision.models.feature_extraction import get_graph_node_names
 from torchvision.models.feature_extraction import create_feature_extractor
-from skimage.color import rgb2gray, gray2rgb
-from process_image2 import initial_rois, check_cutout
 
-IMAGE_THRESHOLD_CERT = 11
-ROI_THRESHOLD_CERT_LOW = 5
-ROI_THRESHOLD_CERT_HIGH = 10
 CERT_THRESHOLD = 8
 
 HOME = str(Path.home())
@@ -98,7 +93,7 @@ hyper_params = {
 }
 
 
-class PipelineV2:
+class PipelineV2_2:
     def __init__(self, db_adr: str):
         self.client = weaviate.Client(db_adr)
 
@@ -118,7 +113,7 @@ class PipelineV2:
         self.fe = create_feature_extractor(self.model.net, return_nodes=return_nodes)
 
     def add_to_db(self, data_object: dict, vec: list):
-        self.client.data_object.create(data_object, "RegionOfInterest", vector=vec)
+        self.client.data_object.create(data_object, "DoMars16k", vector=vec)
 
     def query_image(self, file: str, num_to_retrieve=10):
         # preprocess file
@@ -136,7 +131,7 @@ class PipelineV2:
         desc_vec = {"vector": img_desc}
 
         result = (
-            self.client.query.get("RegionOfInterest", ["sourceName", "coordinates"])
+            self.client.query.get("DoMars16k", ["sourceName"])
             .with_near_vector(desc_vec)
             .with_additional(["distance"])
             .with_limit(num_to_retrieve)
@@ -145,21 +140,16 @@ class PipelineV2:
         # print(result)
         res = [
             [i["sourceName"], i["coordinates"]]
-            for i in result["data"]["Get"]["RegionOfInterest"]
+            for i in result["data"]["Get"]["DoMars16k"]
         ]
         distances = [
             i["_additional"]["distance"]
-            for i in result["data"]["Get"]["RegionOfInterest"]
+            for i in result["data"]["Get"]["DoMars16k"]
         ]
         print(f"Distances to query: {distances}")
-        return res, distances
+        return res
 
     def build_db(self, img_files: list, mrf_files: list):
-        try:
-            with open("db_info.pickle", "rb") as f:
-                info_dict = pickle.load(f)
-        except Exception:
-            info_dict = {}
         for file_idx in range(len(img_files)):
             file_name = img_files[file_idx][:-21]
             descriptors, boxes = self.determine_rois(
@@ -172,24 +162,27 @@ class PipelineV2:
                 ):
                     data = {"SourceName": file_name, "Coordinates": str(boxes[item])}
                     self.add_to_db(data, descriptors[item])
-                    if file_name not in info_dict:
-                        info_dict[file_name] = []
-                    info_dict[file_name].append(boxes[item])
-        with open("db_info.pickle", "wb") as f:
-            pickle.dump(info_dict, f)
+
+    def build_dm16k_db(self, file_name):
+        img = skimage.io.imread(file_name)
+        img = data_transform(Image.fromarray(img).convert("RGB"))
+        img = img.unsqueeze(0)
+        descriptor = self.get_descriptor(img)
+        data = {"SourceName": file_name}
+        self.add_to_db(data, descriptor)
 
     def check_for_existing_entries(
         self, source_name: str, box: str, vector: list
     ) -> bool:
         vec = {"vector": vector}
         results = (
-            self.client.query.get("RegionOfInterest", ["sourceName", "coordinates"])
+            self.client.query.get("DoMars16k", ["sourceName"])
             .with_near_vector(vec)
             .do()
         )
         res = [
             i["sourceName"]
-            for i in results["data"]["Get"]["RegionOfInterest"]
+            for i in results["data"]["Get"]["DoMars16k"]
             if i["sourceName"] == source_name and eval(i["coordinates"]) == box
         ]
         if len(res) < 1:
@@ -201,63 +194,11 @@ class PipelineV2:
 
     def check_db(self):
         result = (
-            self.client.query.aggregate("RegionOfInterest")
+            self.client.query.aggregate("DoMars16k")
             .with_fields("meta {count}")
             .do()
         )
         print(result)
-
-    def new_process_image(self, file):
-        rois = []
-        descriptors = []
-
-        og_file = re.sub("mrf", "img", file)
-        og_img = skimage.io.imread(og_file)
-        og_img = rgb2gray(og_img[:, :, :3])
-        # img_cert = check_img(og_file, model, data_transform, device)
-        # og_file_name = og_file.split("/")[-1]
-        # TODO: kinda useless for large images, delete this
-        img_cert = 0
-        if img_cert > IMAGE_THRESHOLD_CERT:
-            # set higher requirements for ROI cert
-            ROI_THRESHOLD_CERT = ROI_THRESHOLD_CERT_HIGH
-        else:
-            ROI_THRESHOLD_CERT = ROI_THRESHOLD_CERT_LOW
-
-        start = time.monotonic()
-        boxes = initial_rois(file)
-        print(f"Created {len(boxes)} boxes in {time.monotonic()-start}s")
-        for c in boxes:
-            cutout = og_img[int(c[0]) : int(c[1]), int(c[2]) : int(c[3])]
-            # print("Done with cutout")
-            # FIXME: implement size filter and size adjustment in the bounding box creation
-            if np.shape(cutout)[0] >= 50 and np.shape(cutout)[1] >= 50:
-                # run through network
-                cert, pred = check_cutout(
-                    og_file, c, self.model, data_transform, self.device
-                )
-                # print(cert)
-                # plt.imshow(og_img[int(c[0]) : int(c[1]), int(c[2]) : int(c[3])])
-                # plt.title(f"{ cert }")
-                # plt.show()
-
-                if cert > ROI_THRESHOLD_CERT:
-                    # save ROI
-                    box = (
-                        og_img[int(c[0]) : int(c[1]), int(c[2]) : int(c[3])] * 255
-                    ).astype("uint8")
-                    prep_box = data_transform(Image.fromarray(box).convert("RGB"))
-                    prep_box = prep_box.unsqueeze(0)
-                    rois.append(c)
-                    desc = self.get_descriptor(prep_box)
-                    descriptors.append(desc)
-
-                    plt.imsave(
-                        f"extracted/{CATEGORIES[pred[0]]}_{cert}.png",
-                        gray2rgb(og_img[int(c[0]) : int(c[1]), int(c[2]) : int(c[3])]),
-                    )
-                # print("Done with chunk.")
-        return rois, descriptors
 
     def get_descriptor(self, x):
         with torch.no_grad():
@@ -379,9 +320,9 @@ class PipelineV2:
 
 
 if __name__ == "__main__":
-    pipe = PipelineV2("http://localhost:8080")
+    pipe = PipelineV2_2("http://localhost:8080")
     print("Instantiated pipeline")
-    test_path = HOME + f"/segmentation/segmented/"
+    test_path = HOME + f"/segmentation/domars_benchmark/"
     all_imgs = os.listdir(test_path)
     all_imgs2 = [i for i in all_imgs if re.findall("img", i)]
     all_imgs = [i for i in all_imgs if re.findall("mrf", i)]
@@ -389,25 +330,12 @@ if __name__ == "__main__":
     all_imgs = [test_path + i for i in all_imgs][63:]
     all_imgs2 = [test_path + i for i in all_imgs2]
     all_imgs3 = [re.sub("img", "mrf", i) for i in all_imgs2]
-    # print(test)
-    # print(all_imgs)
-    # pipe.descriptor_test2(all_imgs2, all_imgs3)
     pipe.check_db()
-    # pipe.build_db(all_imgs2, all_imgs3)
-
-    # vector sum check
-    # res = (
-    #     pipe.client.query.get("RegionOfInterest", ["sourceName"])
-    #     .with_additional(["vector"])
-    #     .do()
-    # )
-
-    # TODO: this is the code for actually using the system lol
-    query_path = HOME + "/query/"
-    img = query_path + os.listdir(query_path)[0]
-    img_name = img.split("/")[-1:][0]
-    img = query_path + img_name
-
-    results, distances = pipe.query_image(img)
-    pipe.store_for_ui(HOME + f"/server-test/", results, img)
-    pipe.clear_queue()
+    path = HOME + f"/codebase-v1/data/data/train"
+    all_files = glob.glob(path+"/**/*.jpg",recursive=True)
+    all_files = [i for i in all_files if re.findall("sample",i)]
+    print(all_files)
+    #pipe.build_db(all_imgs2, all_imgs3)
+    #pipe.build_dm16k_db(all_files[0])
+    for file in all_files:
+        pipe.build_dm16k_db(file)
