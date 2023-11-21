@@ -118,7 +118,7 @@ class PipelineV2:
         self.fe = create_feature_extractor(self.model.net, return_nodes=return_nodes)
 
     def add_to_db(self, data_object: dict, vec: list):
-        self.client.data_object.create(data_object, "RegionOfInterest", vector=vec)
+        self.client.data_object.create(data_object, "DoMars16k", vector=vec)
 
     def query_image(self, file: str, num_to_retrieve=10):
         # preprocess file
@@ -136,7 +136,7 @@ class PipelineV2:
         desc_vec = {"vector": img_desc}
 
         result = (
-            self.client.query.get("RegionOfInterest", ["sourceName", "coordinates"])
+            self.client.query.get("DoMars16k", ["sourceName"])
             .with_near_vector(desc_vec)
             .with_additional(["distance"])
             .with_limit(num_to_retrieve)
@@ -144,12 +144,12 @@ class PipelineV2:
         )
         # print(result)
         res = [
-            [i["sourceName"], i["coordinates"]]
-            for i in result["data"]["Get"]["RegionOfInterest"]
+            [i["sourceName"]]
+            for i in result["data"]["Get"]["DoMars16k"]
         ]
         distances = [
             i["_additional"]["distance"]
-            for i in result["data"]["Get"]["RegionOfInterest"]
+            for i in result["data"]["Get"]["DoMars16k"]
         ]
         print(f"Distances to query: {distances}")
         return res, distances
@@ -183,14 +183,14 @@ class PipelineV2:
     ) -> bool:
         vec = {"vector": vector}
         results = (
-            self.client.query.get("RegionOfInterest", ["sourceName", "coordinates"])
+            self.client.query.get("DoMars16k", ["sourceName"])
             .with_near_vector(vec)
             .do()
         )
         res = [
             i["sourceName"]
-            for i in results["data"]["Get"]["RegionOfInterest"]
-            if i["sourceName"] == source_name and eval(i["coordinates"]) == box
+            for i in results["data"]["Get"]["DoMars16k"]
+            if i["sourceName"] == source_name 
         ]
         if len(res) < 1:
             print("New entry. Adding to database...")
@@ -201,7 +201,7 @@ class PipelineV2:
 
     def check_db(self):
         result = (
-            self.client.query.aggregate("RegionOfInterest")
+            self.client.query.aggregate("DoMars16k")
             .with_fields("meta {count}")
             .do()
         )
@@ -320,15 +320,13 @@ class PipelineV2:
         shutil.copy(query, folder + f"query.{file_format}")
         counter = 1
         for result in results:
-            all_imgs = os.listdir(images_path)
-            box = result[1]
-            box = eval(box)
+            all_imgs = glob.glob(HOME + "/codebase-v1/data/data/"+"/**/**/*.jpg",recursive=True)
+            #box = result[1]
+            #box = eval(box)
             img_name = result[0].split("/")[-1]
-            img = [
-                i for i in all_imgs if re.findall(img_name, i) and re.findall("img", i)
-            ][0]
-            cutout = skimage.io.imread(images_path + img)
-            cutout = cutout[int(box[0]) : int(box[1]), int(box[2]) : int(box[3])]
+            img = [i for i in all_imgs if re.findall(img_name, i)][0]
+            cutout = skimage.io.imread(img)
+            #cutout = cutout[int(box[0]) : int(box[1]), int(box[2]) : int(box[3])]
             skimage.io.imsave(folder + f"retrieval_{counter}.png", cutout)
             counter += 1
 
@@ -397,7 +395,7 @@ if __name__ == "__main__":
 
     # vector sum check
     # res = (
-    #     pipe.client.query.get("RegionOfInterest", ["sourceName"])
+    #     pipe.client.query.get(6kegionOfInterest", ["sourceName"])
     #     .with_additional(["vector"])
     #     .do()
     # )
