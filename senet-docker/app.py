@@ -3,7 +3,7 @@ This app is instantiated in the docker container and provides the necessary apis
 """
 
 from fastapi import FastAPI, Response, status
-from senet-model import SENet
+from senet_model import SENet
 import os
 import numpy as np
 from pydantic import BaseModel
