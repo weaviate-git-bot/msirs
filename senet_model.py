@@ -2,6 +2,7 @@ import numpy as np
 import skimage
 import tensorflow as tf
 import scipy
+import json
 
 CATEGORIES = {
     0: "aec",
@@ -23,6 +24,92 @@ CATEGORIES = {
 
 # network only accepts images of size 224x224x3
 IMAGE_SIZE = 224
+
+
+class SegmentChunks(tf.keras.utils.Sequence):
+    def __init__(self, img: np.array, window_size: int = 224, step_size: int = 2):
+        self.image_full = img
+        self.cs = 0
+        self.window_size = window_size
+
+        print(self.image_full.shape)
+
+        # Get shapes of "new" full image
+        self.image_size_full = np.shape(self.image_full)
+
+        self.num_tiles_full = np.ceil(
+            np.array(self.image_size_full) / self.window_size
+        ).astype("int")
+        print(f"{self.num_tiles_full = }")
+
+        wd = self.image_size_full[0]
+        hd = self.image_size_full[1]
+        # create new image of desired size and color (blue) for padding
+        print(window_size)
+        print(self.num_tiles_full)
+        ww, hh = window_size * self.num_tiles_full
+        # hh = window_size * self.num_tiles_full[1]
+
+        # compute center offset
+        xx = (ww - wd) // 2
+        yy = (hh - hd) // 2
+
+        # copy img image into center of result image
+        self.padded_full = np.zeros(
+            tuple((self.num_tiles_full * self.window_size).astype("int")),
+            dtype=np.uint8,
+        )
+        self.padded_full[xx : xx + wd, yy : yy + hd] = self.image_full
+
+        # self.padded_full[:self.image_size_full[0], :self.image_size_full[1]] = self.image_full
+
+        step_size_full = step_size
+        idx_tiles_full_a = np.rint(
+            np.arange(0, self.num_tiles_full[0] * self.window_size, step_size_full)
+        ).astype("int")
+        idx_tiles_full_b = np.rint(
+            np.arange(0, self.num_tiles_full[1] * self.window_size, step_size_full)
+        ).astype("int")
+
+        self.idx_tiles_full_a = idx_tiles_full_a[
+            idx_tiles_full_a + self.window_size
+            < self.num_tiles_full[0] * self.window_size
+        ]
+        self.idx_tiles_full_b = idx_tiles_full_b[
+            idx_tiles_full_b + self.window_size
+            < self.num_tiles_full[1] * self.window_size
+        ]
+
+        self.num_full = np.array(
+            [self.idx_tiles_full_a.__len__(), self.idx_tiles_full_b.__len__()]
+        )
+        self.out_shape = (
+            self.idx_tiles_full_a.__len__(),
+            self.idx_tiles_full_b.__len__(),
+        )
+
+    def __len__(self):
+        return np.prod(self.num_full)
+
+    # FIXME: TEST THIS!!!!!!!!!!!
+    # TODO: need to resize image_batches to form (N,224,244,3)!
+    def __getitem__(self, idx):
+        images = []
+        centers = []
+
+        low = idx * self.batch_size
+        high = min(low + self.batch_size, len(self.x))
+        for my_idx in range(low, high):
+            idx_aa, idx_bb = np.unravel_index(my_idx, self.num_full)
+            idx_a = self.idx_tiles_full_a[idx_aa]
+            idx_b = self.idx_tiles_full_b[idx_bb]
+            image = self.padded_full[
+                idx_a : idx_a + self.window_size, idx_b : idx_b + self.window_size
+            ]
+            centers.append(image[self.window_size // 2, self.window_size // 2])
+            images.append(np.dstack([image] * 3))
+
+        return np.array(images), np.array(centers)
 
 
 class SENet:
@@ -61,85 +148,31 @@ class SENet:
         feature = extractor(image)
         return feature.numpy().reshape((-1,))
 
-    # FIXME: Check if this works yo!!
-    def create_data_batch(
-        self, img: np.array, window_size: int, step_size: int
-    ) -> np.array:
-        image_full = img
-        cs = 0
-        window_size = window_size
-
-        print(image_full.shape)
-
-        # Get shapes of "new" full image
-        image_size_full = np.shape(image_full)
-
-        num_tiles_full = np.ceil(np.array(image_size_full) / window_size).astype("int")
-        print(f"{ num_tiles_full = }")
-
-        wd = image_size_full[0]
-        hd = image_size_full[1]
-        # create new image of desired size and color (blue) for padding
-        print(window_size)
-        print(num_tiles_full)
-        ww, hh = window_size * num_tiles_full
-        # hh = window_size *  num_tiles_full[1]
-
-        # compute center offset
-        xx = (ww - wd) // 2
-        yy = (hh - hd) // 2
-
-        # copy img image into center of result image
-        padded_full = np.zeros(
-            tuple((num_tiles_full * window_size).astype("int")),
-            dtype=np.uint8,
+    # FIXME: Test this
+    def segment_image(
+        self,
+        img: np.array,
+        window_size: int = 200,
+        step_size: int = 4,
+        batch_size: int = 64,
+        workers: int = 4,
+    ) -> None:
+        segmenter_sequence = SegmentChunks(
+            img=img, window_size=window_size, step_size=step_size
         )
-        padded_full[xx : xx + wd, yy : yy + hd] = image_full
-
-        #  padded_full[: image_size_full[0], : image_size_full[1]] =  image_full
-
-        step_size_full = step_size
-        idx_tiles_full_a = np.rint(
-            np.arange(0, num_tiles_full[0] * window_size, step_size_full)
-        ).astype("int")
-        idx_tiles_full_b = np.rint(
-            np.arange(0, num_tiles_full[1] * window_size, step_size_full)
-        ).astype("int")
-
-        idx_tiles_full_a = idx_tiles_full_a[
-            idx_tiles_full_a + window_size < num_tiles_full[0] * window_size
-        ]
-        idx_tiles_full_b = idx_tiles_full_b[
-            idx_tiles_full_b + window_size < num_tiles_full[1] * window_size
-        ]
-
-        num_full = np.array([idx_tiles_full_a.__len__(), idx_tiles_full_b.__len__()])
-        out_shape = (
-            idx_tiles_full_a.__len__(),
-            idx_tiles_full_b.__len__(),
+        self.predictions = self.model.predict(
+            segmenter_sequence,
+            batch_size=batch_size,
+            workers=workers,
+            use_multiprocessing=True,
         )
 
-        # TODO: define indices
-        indices = []
-        images = []
-        for idx in indices:
-            idx_aa, idx_bb = np.unravel_index(idx, num_full)
-            idx_a = idx_tiles_full_a[idx_aa]
-            idx_b = idx_tiles_full_b[idx_bb]
-            image = padded_full[
-                idx_a : idx_a + window_size, idx_b : idx_b + window_size
-            ]
-            # TODO: do i need this??
-            # center_pixel = image[window_size // 2, window_size // 2]
-            images.append(np.dstack([image] * 3))
-
-        return np.array(images)
-
-    async def vectorize(self, img: np.array):
+    async def vectorize(self, img: str):
         """
         Vectorize function that is used by weaviate for use as vectorizer
         """
-        return self.get_descriptor(img)
+        img = json.loads(img)
+        return self.get_descriptor(np.array(img)).tolist()
 
 
 if __name__ == "__main__":
