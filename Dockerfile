@@ -8,7 +8,7 @@ ENV PATH="$PATH:/root/.cargo/bin"
 
 COPY senet-docker/requirements.txt .
 COPY senet-docker/fullAdaptedSENetNetmodel.keras .
-COPY senet-model.py .
+COPY senet_model.py .
 RUN pip3 install -r requirements.txt
 
 COPY senet-docker/ .
