@@ -26,6 +26,7 @@ from process_image2 import initial_rois, check_cutout
 from weaviate_client import WeaviateClient
 import tensorflow as tf
 from senet_model import SENet
+import argparse
 
 IMAGE_THRESHOLD_CERT = 11
 ROI_THRESHOLD_CERT_LOW = 5
@@ -105,9 +106,14 @@ class PipelineV3:
             print(f"Error: {e}")
             return False
 
-    def build_database(self, image_files: list) -> bool:
+    def build_database(self, directory: str, allowed_formats=["jpg", "png"]) -> bool:
         excep = False
-        for img_file in image_files:
+        img_files = []
+        if directory[-1] != "/":
+            directory += "/"
+        for format in allowed_formats:
+            img_files.append(glob.glob(f"{directory}+**/*.{format}", recursive=True))
+        for img_file in img_files:
             try:
                 img = skimage.io.imread(img_file)
                 self.client.add_to_db(img)
@@ -126,6 +132,10 @@ class PipelineV3:
         # TODO: implement
         pass
 
+    def add_to_db(self, img_path: str):
+        img = skimage.io.imread(img_path)
+        self.client.add_to_db(img)
+
     @staticmethod
     def clear_queue():
         # TODO: implement
@@ -135,4 +145,32 @@ class PipelineV3:
 if __name__ == "__main__":
     pipe = PipelineV3("http://localhost:8080")
 
-    pipe.client.check_db()
+    parser = argparse.ArgumentParser(
+        description="Script to allow interaction with MSIRS."
+    )
+    parser.add_argument(
+        "-r",
+        "--retrieve",
+        type=pipe.query_image,
+        action="store",
+        help="Retrieve images for image corresponding to provided path",
+    )
+    parser.add_argument(
+        "-a",
+        "--add",
+        help="Add image provided per path into the database",
+        type=pipe.add_to_db,
+        action="store",
+    )
+    parser.add_argument(
+        "-p",
+        "--populate",
+        type=pipe.build_database,
+        action="store",
+        help="Populate database by adding all provided images",
+    )
+    parser.add_argument(
+        "--summary",
+        type=pipe.client.check_db(),
+        help="Print summary of the current database state",
+    )
