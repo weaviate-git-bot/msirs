@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import weaviate
 import numpy as np
+import json
 
 # TODO: add uuid or smth
 SCHEMA = {
@@ -19,11 +20,33 @@ SCHEMA = {
 
 
 class WeaviateClient:
-    def __init__(self, db_adr: str, schema: dict = SCHEMA) -> None:
+    def __init__(self, db_adr: str, schema: None) -> None:
+        SCHEMA = {
+            "classes": [
+                {
+                    "class": "Test",
+                    "vectorizer": "img2vec-neural",
+                    "vectorIndexType": "hnsw",
+                    "moduleConfig": {"img2vec-neural": {"imageFields": ["image"]}},
+                    "properties": [
+                        {"name": "image", "dataType": ["string"]},
+                        {"name": "source", "dataType": ["string"]},
+                        {"name": "meta_data", "dataType": ["string"]},
+                    ],
+                }
+            ],
+        }
+
         self.client = weaviate.Client(db_adr)
-        self.schema = schema
+
+        # add schema, allow for passing of custom schema for better development and testing
+        if schema == None:
+            self.schema = schema
+        else:
+            self.schema = SCHEMA
 
     def add_to_db(self, img: np.array) -> None:
+        # TODO: make sure image is in correct format!!
         data = {"image": str(img.tolist())}
         # TODO: add meta data here somehow
         self.create_entry(data)
@@ -39,3 +62,33 @@ class WeaviateClient:
         # TODO: rewrite this using UUIDs
         does_exist = True
         return does_exist
+
+    def query_image(self, img_data: dict, num_to_retrieve=10) -> dict:
+        # TODO: make sure this works
+        vector = img_data["image"]
+
+        result = (
+            self.client.query.get("DoMars16k", ["sourceName"])
+            .with_near_vector(
+                {
+                    "vector": vector,
+                }
+            )
+            .with_additional(["distance"])
+            .with_limit(num_to_retrieve)
+            .do()
+        )
+
+        images = [i["source"] for i in result["data"]["Get"][self.schema]]
+        distances = [i["_additional"] for i in result["data"]["Get"][self.schema]]
+        meta_data = [
+            json.loads(i["meta_data"]) for i in result["data"]["Get"][self.schema]
+        ]
+        response = {"images": images, "distances": distances, "meta_data": meta_data}
+        return response
+
+    def check_db(self) -> None:
+        result = (
+            self.client.query.aggregate(self.schema).with_fields("meta {count}").do()
+        )
+        print(result)
