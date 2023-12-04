@@ -179,6 +179,18 @@ class PipelineV3:
             self.store_for_ui(HOME + "/server-test/", response, img)
             self.clear_queue()
 
+    def add_uploaded_image(self, img: str):
+        # TODO: this needs to be fit to the metadata handling
+        # TODO: check for security here??
+        self.add_to_db(img)
+        # TODO: handle metadata here
+        pass
+
+    @staticmethod
+    def format_image(img: np.array) -> np.array:
+        # TODO: do i need that? i have something like this in the senet_model file,,,
+        pass
+
     @staticmethod
     def clear_queue() -> bool:
         # TODO: needs refactor after changes to store_for_ui()
@@ -214,7 +226,7 @@ if __name__ == "__main__":
         "-a",
         "--add",
         help="Add image provided per path into the database",
-        type=pipe.add_to_db,
+        type=pipe.add_uploaded_image,
         action="store",
     )
     parser.add_argument(
