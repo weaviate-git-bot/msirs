@@ -97,14 +97,14 @@ class PipelineV3:
 
         self.model = SENet(model_path=model_path)
 
-    def query_image(self, img: np.array) -> bool:
+    def query_image(self, img: np.array) -> dict:
         try:
             vector = self.model.get_descriptor(img)
-            self.client.query_image(vector)
-            return True
+            response = self.client.query_image(vector)
+            return response
         except Exception as e:
             print(f"Error: {e}")
-            return False
+            return {"has_error": True}
 
     def build_database(self, directory: str, allowed_formats=["jpg", "png"]) -> bool:
         excep = False
@@ -168,6 +168,17 @@ class PipelineV3:
         img = skimage.io.imread(img_path)
         self.client.add_to_db(img)
 
+    def do_retrieval(self, img: str):
+        # this executes all methods for the retrieval process
+
+        response = self.query_image(img)
+        if "has_error" in list(response.keys()):
+            print("Error in during query")
+            return Exception
+        else:
+            self.store_for_ui(HOME + "/server-test/", response, img)
+            self.clear_queue()
+
     @staticmethod
     def clear_queue() -> bool:
         # TODO: needs refactor after changes to store_for_ui()
@@ -195,7 +206,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-r",
         "--retrieve",
-        type=pipe.query_image,
+        type=pipe.do_retrieval,
         action="store",
         help="Retrieve images for image corresponding to provided path",
     )
