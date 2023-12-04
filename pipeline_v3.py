@@ -128,18 +128,62 @@ class PipelineV3:
         # TODO: is this needed?
         pass
 
-    def store_for_ui(self):
-        # TODO: implement
-        pass
+    def store_for_ui(self, folder: str, results: dict, query: str) -> bool:
+        # TODO: this needs refactoring
+        print(results)
+        excep = False
+        images_path = HOME + "/segmentation/segmented/"
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(f"Failed to delete {file_path}. Reason: {e}")
+                excep = True
+
+        # TODO: add query image in this folder as well
+        # TODO: handle the metadata extraction and persisting here!!
+        print(query)
+        file_format = query.split(".")[-1]
+        print(file_format)
+        shutil.copy(query, folder + f"query.{file_format}")
+        counter = 1
+        images = results["source"]
+        for result in images:
+            all_imgs = glob.glob(
+                HOME + "/codebase-v1/data/data/" + "/**/**/*.jpg", recursive=True
+            )
+            img_name = result[0].split("/")[-1]
+            img = [i for i in all_imgs if re.findall(img_name, i)][0]
+            cutout = skimage.io.imread(img)
+            skimage.io.imsave(folder + f"retrieval_{counter}.png", cutout)
+            counter += 1
+
+        return excep
 
     def add_to_db(self, img_path: str):
         img = skimage.io.imread(img_path)
         self.client.add_to_db(img)
 
     @staticmethod
-    def clear_queue():
-        # TODO: implement
-        pass
+    def clear_queue() -> bool:
+        # TODO: needs refactor after changes to store_for_ui()
+        excep = False
+        folder = HOME + "/query/"
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(f"Failed to delete {file_path}. Reason: {e}")
+                excep = True
+        return excep
 
 
 if __name__ == "__main__":
