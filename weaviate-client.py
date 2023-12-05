@@ -13,6 +13,8 @@ SCHEMA = {
             "moduleConfig": {"img2vec-neural": {"imageFields": ["image"]}},
             "properties": [
                 {"name": "image", "dataType": ["string"]},
+                {"name": "source", "dataType": ["string"]},
+                {"name": "meta_data", "dataType": ["string"]},
             ],
         }
     ],
@@ -68,7 +70,7 @@ class WeaviateClient:
         vector = img_data["image"]
 
         result = (
-            self.client.query.get("DoMars16k", ["sourceName"])
+            self.client.query.get(self.schema, ["source", "meta_data"])
             .with_near_vector(
                 {
                     "vector": vector,

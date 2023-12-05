@@ -27,6 +27,7 @@ from weaviate_client import WeaviateClient
 import tensorflow as tf
 from senet_model import SENet
 import argparse
+import json
 
 IMAGE_THRESHOLD_CERT = 11
 ROI_THRESHOLD_CERT_LOW = 5
@@ -156,6 +157,8 @@ class PipelineV3:
         shutil.copy(query, folder + f"query.{file_format}")
         counter = 1
         images = results["source"]
+        meta_data = results["meta_data"]
+        distances = results["distances"]
         for result in images:
             all_imgs = glob.glob(
                 HOME + "/codebase-v1/data/data/" + "/**/**/*.jpg", recursive=True
@@ -165,6 +168,14 @@ class PipelineV3:
             cutout = skimage.io.imread(img)
             skimage.io.imsave(folder + f"retrieval_{counter}.png", cutout)
             counter += 1
+
+        meta_data_dict = {}
+        for idx in range(len(meta_data)):
+            meta_data_dict["meta_data"] = meta_data[idx]
+            meta_data_dict["distances"] = distances[idx]
+
+        with open(folder + "metadata.json", "w+") as f:
+            json.dump(meta_data_dict, f)
 
         return excep
 

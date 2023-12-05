@@ -13,7 +13,7 @@
 
   <h2>Results</h2>{% for n in range(binderList| length) %} <img src=
   "{{url_for('static',filename=binderList[n])}}" width="250" height=
-  "250" alt=binderList> {{ distances[n] }} {% endfor %}
+  "250" alt=binderList> {{ meta_data[n] }} {% endfor %}
 <footer>
   <button><a href=
   "http://127.0.0.1:5000/">Query another image</a></button>

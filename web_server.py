@@ -115,6 +115,18 @@ def upload_file():
                 home_dir + f"/msirs/static/{item}",
             )
 
+        stdin, stdout, stderr = server.ssh.exec_command(
+            "ls ~/server-test | grep metadata"
+        )
+        output = stdout.readlines()
+        for item in output:
+            item = item[:-1]
+            print(item)
+            server.connection.get(
+                f"/home/{server.username}/server-test/{item}",
+                home_dir + f"/msirs/static/{item}",
+            )
+
         # close connections
         server.connection.close()
         server.ssh.close()
@@ -132,12 +144,24 @@ def results():
     # results = [res_path+i for i in files if re.findall("result", i) or re.findall("query", i)]
     results = [i for i in files if re.findall("retrieval", i)]
     results = [f"retrieval_{i+1}.png" for i in range(len(results))]
-    distances = [0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.3, 0.6, 0.9]
-    distances = session["distances"]
-    # results = sorted(results)
+    with open(res_path + "metadata.json") as f:
+        meta_data = json.load(f)
+    # format this here, such that the jinja loop only needs to display the string
+    meta_data_spelled_out = []
+    distances_spelled_out = [f"Distance: {i}" for i in meta_data["distances"]]
+    for idx in range(len(meta_data["distances"])):
+        for entry in meta_data["meta_data"].keys():
+            meta_data_spelled_out.append(
+                f"{entry}: {meta_data['meta_data'][entry][idx]}\n"
+            )
 
+    meta_data = [
+        [meta_data_spelled_out[i], distances_spelled_out[i]]
+        for i in range(len(meta_data["distances"]))
+    ]
     print(results)
-    return render_template("results.html", binderList=results, distances=distances)
+    print(meta_data)
+    return render_template("results.html", binderList=results, meta_data=meta_data)
 
 
 @app.route("/upload_success")
