@@ -87,9 +87,15 @@ MODEL_PATH = ""
 
 
 class PipelineV3:
-    def __init__(self, db_adr: str, schema=None, model_path=None):
+    def __init__(
+        self,
+        db_adr: str,
+        schema=None,
+        model_path=None,
+        image_storage_directory: str = "/images/",
+    ):
         self.client = WeaviateClient(db_adr, schema)
-
+        self.image_storage_directory = image_storage_directory
         print("Num GPUs Available: ", len(tf.config.list_physical_devices("GPU")))
 
         if model_path == None:
@@ -115,9 +121,7 @@ class PipelineV3:
             img_files.append(glob.glob(f"{directory}+**/*.{format}", recursive=True))
         for img_file in img_files:
             try:
-                img = skimage.io.imread(img_file)
-                self.client.add_to_db(img)
-
+                self.add_to_db(img_file)
             except Exception as e:
                 print(f"Skipping {img_file}: {e}")
                 excep = True
@@ -166,6 +170,8 @@ class PipelineV3:
 
     def add_to_db(self, img_path: str):
         img = skimage.io.imread(img_path)
+        new_image_file_name = self.image_storage_directory + img_path.split("/")[-1]
+        skimage.io.imsave(new_image_file_name, img)
         self.client.add_to_db(img)
 
     def do_retrieval(self, img: str):
