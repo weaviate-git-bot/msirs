@@ -1,27 +1,12 @@
 #!/usr/bin/env python3
 
 import shutil
-from sys import exception
 import numpy as np
-import weaviate, re, os, random, pickle
-import skimage.io
+import re, os, glob
+import skimage
 from matplotlib import pyplot as plt
-from process_image import detect_regions, extract_regions, post_process
 import numpy as np
-import torch
-from torchvision import transforms
-from torch.utils.data import DataLoader
-import glob, time
-from domars_map import MarsModel, HIRISE_Image, segment_image
-from process_image2 import process_image
-from process_image import detect_regions
-from PIL import Image
-from scipy import spatial
 from pathlib import Path
-from torchvision.models.feature_extraction import get_graph_node_names
-from torchvision.models.feature_extraction import create_feature_extractor
-from skimage.color import rgb2gray, gray2rgb
-from process_image2 import initial_rois, check_cutout
 
 from weaviate_client import WeaviateClient
 import tensorflow as tf
@@ -104,7 +89,7 @@ class PipelineV3:
 
         self.model = SENet(model_path=model_path)
 
-    def query_image(self, img: np.array) -> dict:
+    def query_image(self, img: np.ndarray) -> dict:
         try:
             vector = self.model.get_descriptor(img)
             response = self.client.query_image(vector)
@@ -180,20 +165,23 @@ class PipelineV3:
         return excep
 
     def add_to_db(self, img_path: str):
+        """
+        Provided an image path, this function adds the image into the assoicated weaviate database.
+        """
         img = skimage.io.imread(img_path)
         new_image_file_name = self.image_storage_directory + img_path.split("/")[-1]
         skimage.io.imsave(new_image_file_name, img)
         self.client.add_to_db(img)
 
-    def do_retrieval(self, img: str):
+    def do_retrieval(self, img_path: str):
         # this executes all methods for the retrieval process
-
+        img = skimage.io.imread(img_path)
         response = self.query_image(img)
         if "has_error" in list(response.keys()):
             print("Error in during query")
             return Exception
         else:
-            self.store_for_ui(HOME + "/server-test/", response, img)
+            self.store_for_ui(HOME + "/server-test/", response, img_path)
             self.clear_queue()
 
     def add_uploaded_image(self, img: str):
@@ -204,9 +192,9 @@ class PipelineV3:
         pass
 
     @staticmethod
-    def format_image(img: np.array) -> np.array:
+    def format_image(img: np.ndarray) -> np.ndarray:
         # TODO: do i need that? i have something like this in the senet_model file,,,
-        pass
+        return np.zeros((3, 3))
 
     @staticmethod
     def clear_queue() -> bool:
@@ -255,6 +243,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--summary",
-        type=pipe.client.check_db(),
+        type=pipe.client.check_db,
         help="Print summary of the current database state",
     )

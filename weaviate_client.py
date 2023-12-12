@@ -22,7 +22,7 @@ SCHEMA = {
 
 
 class WeaviateClient:
-    def __init__(self, db_adr: str, schema: None) -> None:
+    def __init__(self, db_adr: str, schema=None) -> None:
         SCHEMA = {
             "classes": [
                 {
@@ -47,7 +47,7 @@ class WeaviateClient:
         else:
             self.schema = SCHEMA
 
-    def add_to_db(self, img: np.array) -> None:
+    def add_to_db(self, img: np.ndarray) -> None:
         # TODO: make sure image is in correct format!!
         data = {"image": str(img.tolist())}
         # TODO: add meta data here somehow
@@ -65,9 +65,9 @@ class WeaviateClient:
         does_exist = True
         return does_exist
 
-    def query_image(self, img_data: dict, num_to_retrieve=10) -> dict:
+    def query_image(self, img_data: np.ndarray, num_to_retrieve=10) -> dict:
         # TODO: make sure this works
-        vector = img_data["image"]
+        vector = img_data.tolist()
 
         result = (
             self.client.query.get(self.schema, ["source", "meta_data"])

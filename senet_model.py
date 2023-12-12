@@ -27,7 +27,7 @@ IMAGE_SIZE = 224
 
 
 class SegmentChunks(tf.keras.utils.Sequence):
-    def __init__(self, img: np.array, window_size: int = 224, step_size: int = 2):
+    def __init__(self, img: np.ndarray, window_size: int = 224, step_size: int = 2):
         self.image_full = img
         self.cs = 0
         self.window_size = window_size
@@ -117,7 +117,7 @@ class SENet:
         self.model = tf.keras.models.load_model(model_path)
 
     @staticmethod
-    def prep_image(img: np.array) -> np.array:
+    def prep_image(img: np.ndarray) -> np.ndarray:
         """
         Prepares a greyscale image (1 channel) for use with the network
         """
@@ -128,7 +128,7 @@ class SENet:
         image = np.resize(image, (1, 224, 224, 3))
         return image
 
-    def predict(self, img: np.array) -> str:
+    def predict(self, img: np.ndarray) -> str:
         """
         Returns string of predicted class for given input image
         """
@@ -137,7 +137,7 @@ class SENet:
         prediction = predictions[0]
         return CATEGORIES[np.argmax(prediction)]
 
-    def get_descriptor(self, img: np.array) -> np.array:
+    def get_descriptor(self, img: np.ndarray) -> np.ndarray:
         """
         Returns 512 dimensional descriptor of image, by using output of second to last model layer
         """
@@ -151,7 +151,7 @@ class SENet:
     # FIXME: Test this
     def segment_image(
         self,
-        img: np.array,
+        img: np.ndarray,
         window_size: int = 200,
         step_size: int = 4,
         batch_size: int = 64,
