@@ -47,10 +47,14 @@ class WeaviateClient:
         else:
             self.schema = schema
 
-    def add_to_db(self, img: np.ndarray) -> None:
+    def add_to_db(
+        self, img: np.ndarray, original_file_path: str, file_path: str
+    ) -> None:
+        # TODO: handle case in which no metadata json file is found
+        with open(original_file_path) as f:
+            metadata = json.load(f)
         # TODO: make sure image is in correct format!!
-        data = {"image": str(img.tolist())}
-        # TODO: add meta data here somehow
+        data = {"image": str(img.tolist()), "source": file_path, "meta_data": metadata}
         self.create_entry(data)
 
     def create_entry(self, data_object: dict) -> None:
@@ -61,7 +65,7 @@ class WeaviateClient:
             print("Object already exists, skipping addition")
 
     def check_for_duplicate_entries(self, object_to_check: dict) -> bool:
-        # TODO: rewrite this using UUIDs
+        # TODO: rewrite this using UUIDs, or something similar
         does_exist = True
         return does_exist
 

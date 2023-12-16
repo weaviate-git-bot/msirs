@@ -171,7 +171,9 @@ class PipelineV3:
         img = skimage.io.imread(img_path)
         new_image_file_name = self.image_storage_directory + img_path.split("/")[-1]
         skimage.io.imsave(new_image_file_name, img)
-        self.client.add_to_db(img)
+        self.client.add_to_db(
+            img, original_file_path=img_path, file_path=new_image_file_name
+        )
 
     def do_retrieval(self, img_path: str):
         # this executes all methods for the retrieval process
