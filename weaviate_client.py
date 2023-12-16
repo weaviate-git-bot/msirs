@@ -22,7 +22,7 @@ SCHEMA = {
 
 
 class WeaviateClient:
-    def __init__(self, db_adr: str, schema=None) -> None:
+    def __init__(self, db_adr: str, schema: str = "") -> None:
         SCHEMA = {
             "classes": [
                 {
@@ -42,10 +42,10 @@ class WeaviateClient:
         self.client = weaviate.Client(db_adr)
 
         # add schema, allow for passing of custom schema for better development and testing
-        if schema == None:
-            self.schema = schema
+        if schema == "":
+            self.schema = "Test"
         else:
-            self.schema = SCHEMA
+            self.schema = schema
 
     def add_to_db(self, img: np.ndarray) -> None:
         # TODO: make sure image is in correct format!!
