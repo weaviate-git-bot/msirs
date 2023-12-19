@@ -4,6 +4,12 @@ import tensorflow as tf
 import scipy
 import json
 
+from keras import backend as K
+from matplotlib import pyplot as plt
+
+# FIXME: i should switch to GradientTape as the official replacement
+tf.compat.v1.disable_eager_execution()
+
 CATEGORIES = {
     0: "aec",
     1: "ael",
@@ -174,11 +180,67 @@ class SENet:
         img = json.loads(img)
         return self.get_descriptor(np.array(img)).tolist()
 
+    def make_gradcam_heatmap(
+        self, img: np.ndarray, last_conv_layer_name: str, pred_index=None
+    ) -> np.ndarray:
+        # First, we create a model that maps the input image to the activations
+        # of the last conv layer as well as the output predictions
+
+        img = self.prep_image(img)
+        grad_model = tf.keras.models.Model(
+            self.model.inputs,
+            [self.model.get_layer(last_conv_layer_name).output, self.model.output],
+        )
+
+        # Then, we compute the gradient of the top predicted class for our input image
+        # with respect to the activations of the last conv layer
+        with tf.GradientTape() as tape:
+            last_conv_layer_output, preds = grad_model(img)
+            if pred_index is None:
+                pred_index = tf.argmax(preds[0])
+            class_channel = preds[:, pred_index]
+
+        # This is the gradient of the output neuron (top predicted or chosen)
+        # with regard to the output feature map of the last conv layer
+        grads = tape.gradient(class_channel, last_conv_layer_output)
+
+        pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+        last_conv_layer_output = last_conv_layer_output[0]
+        heatmap = last_conv_layer_output @ pooled_grads[..., tf.newaxis]
+        heatmap = tf.squeeze(heatmap)
+
+        heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+        return heatmap.numpy()
+
+    def activation_map(self, predictions, img):
+        img = self.prep_image(img)
+        argmax = np.argmax(predictions[0])
+        output = self.model.output[:, argmax]
+
+        last_conv_layer = self.model.get_layer("conv2d_5")
+        grads = K.gradients(output, last_conv_layer.output)[0]
+        pooled_grads = K.mean(grads, axis=(0, 1, 2))
+        iterate = K.function(
+            [self.model.input], [pooled_grads, last_conv_layer.output[0]]
+        )
+        pooled_grads_value, conv_layer_output_value = iterate([img])
+
+        for i in range(512):
+            conv_layer_output_value[:, :, i] *= pooled_grads_value[i]
+
+        heatmap = np.mean(conv_layer_output_value, axis=-1)
+        heatmap = np.maximum(heatmap, 0)
+        heatmap /= np.max(heatmap)
+        plt.matshow(heatmap)
+        plt.show()
+
 
 if __name__ == "__main__":
     # small example showcasing class
 
     model = SENet("fullAdaptedSENetNetmodel.keras")
+    print(model.model.summary())
 
     img_paths = [
         "/Users/dusc/codebase-v1/data/data/test/ael/B08_012727_1742_XN_05S348W_CX1593_CY12594.jpg",
@@ -190,19 +252,24 @@ if __name__ == "__main__":
     features = []
 
     for i in range(len(img_paths)):
-        features.append(model.get_descriptor(skimage.io.imread(img_paths[i])))
-        print(model.predict(skimage.io.imread(img_paths[i])))
+        # features.append(model.get_descriptor(skimage.io.imread(img_paths[i])))
+        predictions = model.predict(skimage.io.imread(img_paths[i]))
+        model.activation_map(
+            predictions=predictions, img=skimage.io.imread(img_paths[i])
+        )
+        # plt.imshow(heatmap)
+        # plt.show()
 
-    dis01 = scipy.spatial.distance.cosine(features[0], features[1])
-    dis02 = scipy.spatial.distance.cosine(features[0], features[2])
-    dis03 = scipy.spatial.distance.cosine(features[0], features[3])
-    dis13 = scipy.spatial.distance.cosine(features[1], features[3])
-    dis12 = scipy.spatial.distance.cosine(features[1], features[2])
-    dis10 = scipy.spatial.distance.cosine(features[1], features[0])
+    # dis01 = scipy.spatial.distance.cosine(features[0], features[1])
+    # dis02 = scipy.spatial.distance.cosine(features[0], features[2])
+    # dis03 = scipy.spatial.distance.cosine(features[0], features[3])
+    # dis13 = scipy.spatial.distance.cosine(features[1], features[3])
+    # dis12 = scipy.spatial.distance.cosine(features[1], features[2])
+    # dis10 = scipy.spatial.distance.cosine(features[1], features[0])
 
-    print(f"{dis01 = }")
-    print(f"{dis02 = }")
-    print(f"{dis03 = }")
-    print(f"{dis10 = }")
-    print(f"{dis12 = }")
-    print(f"{dis13 = }")
+    # print(f"{dis01 = }")
+    # print(f"{dis02 = }")
+    # print(f"{dis03 = }")
+    # print(f"{dis10 = }")
+    # print(f"{dis12 = }")
+    # print(f"{dis13 = }")
