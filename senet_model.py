@@ -7,8 +7,6 @@ import json
 from keras import backend as K
 from matplotlib import pyplot as plt
 
-# FIXME: i should switch to GradientTape as the official replacement
-tf.compat.v1.disable_eager_execution()
 
 CATEGORIES = {
     0: "aec",
@@ -235,6 +233,94 @@ class SENet:
         plt.matshow(heatmap)
         plt.show()
 
+    def activation_map_v3(self, img: np.ndarray):
+        img = self.prep_image(img)
+        conv_layer = self.model.get_layer("conv2d_5")
+
+        heatmap_model = tf.keras.models.Model(
+            [self.model.inputs],
+            [self.model.get_layer("conv2d_5").output, self.model.output],
+        )
+
+        with tf.GradientTape() as tape:
+            conv_output, predictions = heatmap_model(img)
+            loss = predictions[:, np.argmax(predictions[0])]
+
+        grads = tape.gradient(loss, conv_output)
+
+        pooled_grads = K.mean(grads, axis=(0, 1, 2))
+        iterate = K.function(
+            [self.model.input], [pooled_grads, self.model.get_layer("conv2d_5")]
+        )
+        pooled_grads_value, conv_layer_output_value = iterate([img])
+
+        for i in range(512):
+            conv_layer_output_value[:, :, i] *= pooled_grads_value[i]
+
+        heatmap = np.mean(conv_layer_output_value, axis=-1)
+        heatmap = np.maximum(heatmap, 0)
+        heatmap /= np.max(heatmap)
+        plt.matshow(heatmap)
+        plt.show()
+
+    def heatmap_v4(self, img: np.ndarray):
+        img = self.prep_image(img)
+        input_layer = self.model.get_layer("input_1")
+        conv_layer = self.model.get_layer("conv2d_5")
+        heatmap_model = tf.keras.models.Model(
+            [self.model.inputs], [conv_layer.output, self.model.output]
+        )
+
+        # Get gradient of the winner class w.r.t. the output of the (last) conv. layer
+        with tf.GradientTape() as gtape:
+            conv_output, predictions = heatmap_model(img)
+            loss = predictions[:, np.argmax(predictions[0])]
+            grads = gtape.gradient(loss, conv_output)
+            pooled_grads = K.mean(grads, axis=(0, 1, 2))
+
+        # Get values of pooled grads and model conv. layer output as Numpy arrays
+        iterate = K.function([self.model.inputs], [pooled_grads, conv_layer.output[0]])
+        pooled_grads_value, conv_layer_output_value = iterate([img])
+
+        # Multiply each channel in the feature-map array by "how important it is"
+        for i in range(pooled_grads_value.shape[0]):
+            conv_layer_output_value[:, :, i] *= pooled_grads_value[i]
+
+        # Channel-wise mean of resulting feature-map is the heatmap of class activation
+        heatmap = np.mean(conv_layer_output_value, axis=-1)
+        heatmap = np.maximum(heatmap, 0)
+        max_heat = np.max(heatmap)
+        if max_heat == 0:
+            max_heat = 1e-10
+        heatmap /= max_heat
+
+        # Render heatmap via pyplot
+        plt.matshow(heatmap)
+        plt.show()
+
+    def heatmap_v5(self, img: np.ndarray):
+        model = self.model
+        img = self.prep_image(img)
+        preds = self.model.predict(img)
+        with tf.GradientTape() as tape:
+            last_conv_layer = self.model.get_layer("conv2d_5")
+            iterate = tf.keras.models.Model(
+                [model.inputs], [model.output, last_conv_layer.output]
+            )
+            model_out, last_conv_layer = iterate(img)
+            print(last_conv_layer)
+            class_out = model_out[:, np.argmax(model_out[0])]
+            grads = tape.gradient(class_out, last_conv_layer)
+            pooled_grads = K.mean(grads, axis=(0, 1, 2))
+
+        heatmap = tf.reduce_mean(tf.multiply(pooled_grads, last_conv_layer), axis=-1)
+        print(heatmap)
+        heatmap = np.maximum(heatmap, 0)
+        heatmap /= np.max(heatmap)
+        heatmap = heatmap.reshape((7, 7))
+        plt.matshow(heatmap)
+        plt.show()
+
 
 if __name__ == "__main__":
     # small example showcasing class
@@ -244,9 +330,9 @@ if __name__ == "__main__":
 
     img_paths = [
         "/Users/dusc/codebase-v1/data/data/test/ael/B08_012727_1742_XN_05S348W_CX1593_CY12594.jpg",
-        "/Users/dusc/codebase-v1/data/data/test/cra/B07_012260_1447_XI_35S194W_CX4750_CY4036.jpg",
-        "/Users/dusc/codebase-v1/data/data/test/ael/P06_003352_1763_XN_03S345W_CX440_CY3513.jpg",
-        "/Users/dusc/codebase-v1/data/data/test/cra/K01_053719_1938_XI_13N232W_CX1714_CY6640.jpg",
+        # "/Users/dusc/codebase-v1/data/data/test/cra/B07_012260_1447_XI_35S194W_CX4750_CY4036.jpg",
+        # "/Users/dusc/codebase-v1/data/data/test/ael/P06_003352_1763_XN_03S345W_CX440_CY3513.jpg",
+        # "/Users/dusc/codebase-v1/data/data/test/cra/K01_053719_1938_XI_13N232W_CX1714_CY6640.jpg",
     ]
 
     features = []
@@ -254,9 +340,7 @@ if __name__ == "__main__":
     for i in range(len(img_paths)):
         # features.append(model.get_descriptor(skimage.io.imread(img_paths[i])))
         predictions = model.predict(skimage.io.imread(img_paths[i]))
-        model.activation_map(
-            predictions=predictions, img=skimage.io.imread(img_paths[i])
-        )
+        model.heatmap_v5(img=skimage.io.imread(img_paths[i]))
         # plt.imshow(heatmap)
         # plt.show()
 
