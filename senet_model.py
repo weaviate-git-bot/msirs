@@ -333,9 +333,10 @@ if __name__ == "__main__":
     # small example showcasing class
 
     model = SENet("fullAdaptedSENetNetmodel.keras")
-    print(model.model.summary())
+    # print(model.model.summary())
 
     img_paths = [
+        # "/Users/dusc/codebase-v1/data/data/test/cli/B01_009847_1486_XI_31S197W_CX1517_CY4637.jpg",
         "/Users/dusc/codebase-v1/data/data/test/ael/B08_012727_1742_XN_05S348W_CX1593_CY12594.jpg",
         # "/Users/dusc/codebase-v1/data/data/test/cra/B07_012260_1447_XI_35S194W_CX4750_CY4036.jpg",
         # "/Users/dusc/codebase-v1/data/data/test/ael/P06_003352_1763_XN_03S345W_CX440_CY3513.jpg",
@@ -347,6 +348,7 @@ if __name__ == "__main__":
     for i in range(len(img_paths)):
         # features.append(model.get_descriptor(skimage.io.imread(img_paths[i])))
         predictions = model.predict(skimage.io.imread(img_paths[i]))
+        print(predictions)
         model.heatmap_v5(img=skimage.io.imread(img_paths[i]))
         # plt.imshow(heatmap)
         # plt.show()
