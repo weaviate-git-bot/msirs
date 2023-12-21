@@ -308,17 +308,24 @@ class SENet:
                 [model.inputs], [model.output, last_conv_layer.output]
             )
             model_out, last_conv_layer = iterate(img)
-            print(last_conv_layer)
+            # print(last_conv_layer)
             class_out = model_out[:, np.argmax(model_out[0])]
             grads = tape.gradient(class_out, last_conv_layer)
             pooled_grads = K.mean(grads, axis=(0, 1, 2))
 
+        print(pooled_grads)
+        print(last_conv_layer)
+        print(np.shape(pooled_grads))
+        print(np.shape(last_conv_layer))
         heatmap = tf.reduce_mean(tf.multiply(pooled_grads, last_conv_layer), axis=-1)
-        print(heatmap)
-        heatmap = np.maximum(heatmap, 0)
-        heatmap /= np.max(heatmap)
+        print(np.max(heatmap))
+        heatmap = heatmap * (10e28)
+        heatmap = heatmap.numpy()
+        # heatmap = np.maximum(heatmap, 0)
+        # heatmap /= np.max(heatmap)
         heatmap = heatmap.reshape((7, 7))
-        plt.matshow(heatmap)
+        print(heatmap)
+        plt.imshow(heatmap)
         plt.show()
 
 
