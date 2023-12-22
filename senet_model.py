@@ -328,19 +328,50 @@ class SENet:
         plt.imshow(heatmap)
         plt.show()
 
+    def heatmap_v6(self, img: np.ndarray):
+        img = self.prep_image(img)
+        print(img.shape)
+        last_layer_weights = self.model.layers[-3].get_weights()[0]
+        print(np.shape(last_layer_weights))
+
+        model2 = tf.keras.models.Model(
+            inputs=self.model.input,
+            outputs=(self.model.layers[-8].output, self.model.layers[-3].output),
+        )
+        last_conv_layer_output, last_layer_output = model2.predict(img)
+        print(np.shape(last_conv_layer_output))
+        print(np.shape(last_layer_output))
+
+        last_conv_layer_output = np.squeeze(last_conv_layer_output)
+        pred = np.argmax(last_layer_output)
+        h = int(img.shape[1] / last_conv_layer_output.shape[1])
+        # w = int(img.shape[2] / last_conv_layer_output.shape[2])
+        upsampled_heat = scipy.ndimage.zoom(last_conv_layer_output, (h, h, 1), order=1)
+        print(np.shape(upsampled_heat))
+        weights_for_pred = last_layer_weights[pred]
+        weights_p1 = weights_for_pred[:256]
+        print(np.shape(weights_p1))
+
+        # TODO: upsample the last dim for conv layer to make it compatable
+        heatmap = np.dot(upsampled_heat.reshape((224 * 224, 256)), weights_p1).reshape(
+            224, 224
+        )
+        plt.imshow(heatmap)
+        plt.show()
+
 
 if __name__ == "__main__":
     # small example showcasing class
 
     model = SENet("fullAdaptedSENetNetmodel.keras")
-    # print(model.model.summary())
+    print(model.model.summary())
 
     img_paths = [
-        # "/Users/dusc/codebase-v1/data/data/test/cli/B01_009847_1486_XI_31S197W_CX1517_CY4637.jpg",
+        "/Users/dusc/codebase-v1/data/data/test/cli/B01_009847_1486_XI_31S197W_CX1517_CY4637.jpg",
         "/Users/dusc/codebase-v1/data/data/test/ael/B08_012727_1742_XN_05S348W_CX1593_CY12594.jpg",
-        # "/Users/dusc/codebase-v1/data/data/test/cra/B07_012260_1447_XI_35S194W_CX4750_CY4036.jpg",
-        # "/Users/dusc/codebase-v1/data/data/test/ael/P06_003352_1763_XN_03S345W_CX440_CY3513.jpg",
-        # "/Users/dusc/codebase-v1/data/data/test/cra/K01_053719_1938_XI_13N232W_CX1714_CY6640.jpg",
+        "/Users/dusc/codebase-v1/data/data/test/cra/B07_012260_1447_XI_35S194W_CX4750_CY4036.jpg",
+        "/Users/dusc/codebase-v1/data/data/test/ael/P06_003352_1763_XN_03S345W_CX440_CY3513.jpg",
+        "/Users/dusc/codebase-v1/data/data/test/cra/K01_053719_1938_XI_13N232W_CX1714_CY6640.jpg",
     ]
 
     features = []
@@ -349,7 +380,7 @@ if __name__ == "__main__":
         # features.append(model.get_descriptor(skimage.io.imread(img_paths[i])))
         predictions = model.predict(skimage.io.imread(img_paths[i]))
         print(predictions)
-        model.heatmap_v5(img=skimage.io.imread(img_paths[i]))
+        model.heatmap_v6(img=skimage.io.imread(img_paths[i]))
         # plt.imshow(heatmap)
         # plt.show()
 
