@@ -313,49 +313,54 @@ class SENet:
             grads = tape.gradient(class_out, last_conv_layer)
             pooled_grads = K.mean(grads, axis=(0, 1, 2))
 
-        print(pooled_grads)
-        print(last_conv_layer)
-        print(np.shape(pooled_grads))
-        print(np.shape(last_conv_layer))
         heatmap = tf.reduce_mean(tf.multiply(pooled_grads, last_conv_layer), axis=-1)
-        print(np.max(heatmap))
         heatmap = heatmap * (10e28)
         heatmap = heatmap.numpy()
         # heatmap = np.maximum(heatmap, 0)
         # heatmap /= np.max(heatmap)
         heatmap = heatmap.reshape((7, 7))
-        print(heatmap)
         plt.imshow(heatmap)
         plt.show()
 
     def heatmap_v6(self, img: np.ndarray):
         img = self.prep_image(img)
-        print(img.shape)
         last_layer_weights = self.model.layers[-3].get_weights()[0]
-        print(np.shape(last_layer_weights))
 
         model2 = tf.keras.models.Model(
             inputs=self.model.input,
             outputs=(self.model.layers[-8].output, self.model.layers[-3].output),
         )
         last_conv_layer_output, last_layer_output = model2.predict(img)
-        print(np.shape(last_conv_layer_output))
-        print(np.shape(last_layer_output))
 
         last_conv_layer_output = np.squeeze(last_conv_layer_output)
         pred = np.argmax(last_layer_output)
         h = int(img.shape[1] / last_conv_layer_output.shape[1])
         # w = int(img.shape[2] / last_conv_layer_output.shape[2])
-        upsampled_heat = scipy.ndimage.zoom(last_conv_layer_output, (h, h, 1), order=1)
-        print(np.shape(upsampled_heat))
+        # upsampled_heat = scipy.ndimage.zoom(
+        #     last_conv_layer_output, (h, h, 1), order=1
+        # )
+        upsampled_heat = skimage.transform.resize(
+            last_conv_layer_output,
+            (
+                last_conv_layer_output.shape[0] * h,
+                last_conv_layer_output.shape[1] * h,
+                512,
+            ),
+            anti_aliasing=True,
+        )
         weights_for_pred = last_layer_weights[pred]
-        weights_p1 = weights_for_pred[:256]
-        print(np.shape(weights_p1))
+        # weights_p1 = weights_for_pred[:256]
+        # print(np.shape(weights_p1))
 
         # TODO: upsample the last dim for conv layer to make it compatable
-        heatmap = np.dot(upsampled_heat.reshape((224 * 224, 256)), weights_p1).reshape(
-            224, 224
-        )
+        # heatmap = np.dot(upsampled_heat.reshape((224 * 224, 256)), weights_p1).reshape(
+        #     224, 224
+        # )
+
+        heatmap = np.dot(
+            upsampled_heat.reshape((224 * 224, 512)), weights_for_pred
+        ).reshape(224, 224)
+
         plt.imshow(heatmap)
         plt.show()
 
@@ -364,7 +369,7 @@ if __name__ == "__main__":
     # small example showcasing class
 
     model = SENet("fullAdaptedSENetNetmodel.keras")
-    print(model.model.summary())
+    # print(model.model.summary())
 
     img_paths = [
         "/Users/dusc/codebase-v1/data/data/test/cli/B01_009847_1486_XI_31S197W_CX1517_CY4637.jpg",
