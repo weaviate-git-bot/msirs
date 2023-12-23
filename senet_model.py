@@ -361,7 +361,9 @@ class SENet:
             upsampled_heat.reshape((224 * 224, 512)), weights_for_pred
         ).reshape(224, 224)
 
-        plt.imshow(heatmap)
+        fig, ax = plt.subplots()
+        ax.imshow(np.squeeze(img))
+        ax.imshow(heatmap, cmap="jet", alpha=0.5)
         plt.show()
 
 
@@ -372,11 +374,13 @@ if __name__ == "__main__":
     # print(model.model.summary())
 
     img_paths = [
-        "/Users/dusc/codebase-v1/data/data/test/cli/B01_009847_1486_XI_31S197W_CX1517_CY4637.jpg",
-        "/Users/dusc/codebase-v1/data/data/test/ael/B08_012727_1742_XN_05S348W_CX1593_CY12594.jpg",
-        "/Users/dusc/codebase-v1/data/data/test/cra/B07_012260_1447_XI_35S194W_CX4750_CY4036.jpg",
-        "/Users/dusc/codebase-v1/data/data/test/ael/P06_003352_1763_XN_03S345W_CX440_CY3513.jpg",
-        "/Users/dusc/codebase-v1/data/data/test/cra/K01_053719_1938_XI_13N232W_CX1714_CY6640.jpg",
+        # "/Users/dusc/codebase-v1/data/data/test/cli/B01_009847_1486_XI_31S197W_CX1517_CY4637.jpg",
+        # "/Users/dusc/codebase-v1/data/data/test/ael/B08_012727_1742_XN_05S348W_CX1593_CY12594.jpg",
+        # "/Users/dusc/codebase-v1/data/data/test/cra/B07_012260_1447_XI_35S194W_CX4750_CY4036.jpg",
+        # "/Users/dusc/codebase-v1/data/data/test/ael/P06_003352_1763_XN_03S345W_CX440_CY3513.jpg",
+        # "/Users/dusc/codebase-v1/data/data/test/cra/K01_053719_1938_XI_13N232W_CX1714_CY6640.jpg",
+        "/Users/dusc/codebase-v1/data/data/test/cli/F08_038957_1517_XN_28S040W_CX727_CY4635.jpg",
+        "/Users/dusc/codebase-v1/data/data/test/fss/B07_012259_1421_XI_37S167W_CX4172_CY5294.jpg",
     ]
 
     features = []
