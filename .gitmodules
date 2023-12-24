@@ -1,0 +1,3 @@
+[submodule "msirs_utils"]
+	path = msirs_utils
+	url = git@github.com:aetherspritee/msirs-utils.git
