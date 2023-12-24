@@ -10,7 +10,7 @@ from pathlib import Path
 
 from weaviate_client import WeaviateClient
 import tensorflow as tf
-from senet_model import SENet
+from msirs_utils.segmentation.senet_model import SENet
 import argparse
 import json
 
@@ -76,7 +76,7 @@ class PipelineV3:
     def __init__(
         self,
         db_adr: str,
-        schema=None,
+        schema: str = "Test",
         model_path=None,
         image_storage_directory: str = "/images/",
     ):
