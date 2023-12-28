@@ -193,6 +193,9 @@ class PipelineV3:
         # TODO: handle metadata here
         pass
 
+    def add_segmented_img(self, img: str) -> bool:
+        return True
+
     @staticmethod
     def format_image(img: np.ndarray) -> np.ndarray:
         # TODO: do i need that? i have something like this in the senet_model file,,,
